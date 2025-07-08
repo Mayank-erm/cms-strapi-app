@@ -50,6 +50,16 @@ module.exports = {
         middlewares: [],
       },
     },
+    // NEW: Complete index configuration endpoint
+    {
+      method: 'POST',
+      path: '/document-stores/meilisearch/configure-complete',
+      handler: 'meilisearch-controller.configureIndexSettings',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
     {
       method: 'GET',
       path: '/document-stores/search/advanced',

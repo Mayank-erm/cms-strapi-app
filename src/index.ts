@@ -1,4 +1,4 @@
-// src/index.ts - FIXED: Don't interfere with publish operations
+// src/index.ts - REFACTORED: Use MeiliSearchManager instead of duplicating logic
 import axios from 'axios';
 
 interface DocumentData {
@@ -10,7 +10,22 @@ interface DocumentData {
 
 module.exports = {
   register({ strapi }: { strapi: any }) {
-    // FIXED lifecycle hooks that don't interfere with publishing
+    // Initialize MeiliSearch manager once
+    let meiliSearchManager: any = null;
+    
+    const getMeiliSearchManager = () => {
+      if (!meiliSearchManager) {
+        const MeiliSearchManager = require('./api/document-store/services/meilisearch-manager').default;
+        meiliSearchManager = new MeiliSearchManager({
+          host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
+          apiKey: process.env.MEILISEARCH_API_KEY,
+          indexName: 'document_stores'
+        });
+      }
+      return meiliSearchManager;
+    };
+
+    // CLEAN lifecycle hooks that use MeiliSearchManager
     strapi.db.lifecycles.subscribe({
       models: ['api::document-store.document-store'],
       
@@ -65,10 +80,22 @@ module.exports = {
           publishedAt: result.publishedAt
         });
         
-        // Only index if it's published
-        if (result.publishedAt) {
+        // FIXED: Check if document is actually published using multiple methods
+        const isPublished = await checkIfDocumentIsPublished(result.id);
+        console.log(`🔍 Document ${result.id} published status: ${isPublished}`);
+        
+        if (isPublished) {
           console.log('📤 Indexing published document to MeiliSearch...');
-          await indexToMeiliSearch(result);
+          try {
+            // FIXED: Use the result document directly instead of fetching again
+            console.log(`🔄 Using document ${result.id} directly for indexing`);
+            
+            const manager = getMeiliSearchManager();
+            await manager.indexDocument(result);
+            console.log('✅ Successfully indexed to MeiliSearch using manager');
+          } catch (error) {
+            console.error('❌ MeiliSearch indexing failed:', error);
+          }
         } else {
           console.log('📝 Document created as draft, not indexing to MeiliSearch');
         }
@@ -83,20 +110,44 @@ module.exports = {
           publishedAt: result.publishedAt
         });
         
-        // Handle publish/unpublish events properly
-        if (result.publishedAt) {
+        // FIXED: Check if document is actually published using multiple methods
+        const isPublished = await checkIfDocumentIsPublished(result.id);
+        console.log(`🔍 Document ${result.id} published status: ${isPublished}`);
+        
+        if (isPublished) {
           console.log('📤 Document is published, indexing to MeiliSearch...');
-          await indexToMeiliSearch(result);
+          try {
+            // FIXED: Use the result document directly instead of fetching again
+            console.log(`🔄 Using document ${result.id} directly for indexing`);
+            
+            const manager = getMeiliSearchManager();
+            await manager.indexDocument(result);
+            console.log('✅ Successfully indexed to MeiliSearch using manager');
+          } catch (error) {
+            console.error('❌ MeiliSearch indexing failed:', error);
+          }
         } else {
           console.log('📝 Document is draft/unpublished, removing from MeiliSearch...');
-          await removeFromMeiliSearch(result.documentId || result.id);
+          try {
+            const manager = getMeiliSearchManager();
+            await manager.removeDocument(result.documentId || result.id);
+            console.log('✅ Successfully removed from MeiliSearch using manager');
+          } catch (error) {
+            console.error('❌ MeiliSearch removal failed:', error);
+          }
         }
       },
       
       async afterDelete(event: any) {
         const { result } = event;
         console.log('🗑️ Document deleted:', result.id);
-        await removeFromMeiliSearch(result.documentId || result.id);
+        try {
+          const manager = getMeiliSearchManager();
+          await manager.removeDocument(result.documentId || result.id);
+          console.log('✅ Successfully removed from MeiliSearch using manager');
+        } catch (error) {
+          console.error('❌ MeiliSearch removal failed:', error);
+        }
       }
     });
 
@@ -104,7 +155,7 @@ module.exports = {
   }
 };
 
-// Helper function to fetch and populate from FastAPI
+// Helper function to fetch and populate from FastAPI (unchanged)
 async function fetchAndPopulateFromFastAPI(data: DocumentData): Promise<void> {
   try {
     console.log('Making request to:', `${process.env.FASTAPI_BASE_URL}/api/salesforce/document/${data.SF_Number}`);
@@ -236,163 +287,63 @@ function mapAPIFieldsToStrapi(strapiData: DocumentData, apiData: any): void {
   });
 }
 
-// Helper function to extract text from blocks
-function extractTextFromBlocks(blocks: any): string {
-  if (!blocks || !Array.isArray(blocks)) return '';
-  
-  return blocks
-    .map((block: any) => {
-      if (block.children && Array.isArray(block.children)) {
-        return block.children
-          .filter((child: any) => child.type === 'text')
-          .map((child: any) => child.text)
-          .join(' ');
-      }
-      return '';
-    })
-    .join(' ')
-    .trim();
-}
-
-// Helper function to format attachments for search
-function formatAttachments(attachments: any): string {
-  if (!attachments || !Array.isArray(attachments)) return '';
-  
-  return attachments
-    .map((attachment: any) => {
-      return [
-        attachment.name,
-        attachment.alternativeText,
-        attachment.caption
-      ].filter(Boolean).join(' ');
-    })
-    .join(' ');
-}
-
-// ENHANCED MeiliSearch indexing with ALL fields
-async function indexToMeiliSearch(document: any): Promise<void> {
+// FIXED: Helper function to check if document is actually published
+async function checkIfDocumentIsPublished(documentId: string | number): Promise<boolean> {
   try {
-    const { MeiliSearch } = require('meilisearch');
-    const meilisearch = new MeiliSearch({
-      host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
-      apiKey: process.env.MEILISEARCH_API_KEY,
+    // Method 1: Direct database query to check publishedAt
+    const dbDoc = await strapi.db.query('api::document-store.document-store').findOne({
+      where: { id: documentId },
+      select: ['id', 'publishedAt']
     });
     
-    const index = meilisearch.index('document_stores');
+    if (dbDoc && dbDoc.publishedAt !== null && dbDoc.publishedAt !== undefined) {
+      console.log(`🟢 Document ${documentId} is published: publishedAt = ${dbDoc.publishedAt}`);
+      return true;
+    }
     
-    // Extract description text properly
-    const descriptionText = extractTextFromBlocks(document.Description);
-    const attachmentsText = formatAttachments(document.Attachments);
-    
-    // Comprehensive document for indexing with ALL fields
-    const searchableDocument = {
-      // Primary identifiers
-      id: document.documentId || document.id,
-      documentId: document.documentId,
-      strapiId: document.id,
-      
-      // ALL Core document fields
-      SF_Number: document.SF_Number || '',
-      Unique_Id: document.Unique_Id || '',
-      Client_Name: document.Client_Name || '',
-      Client_Type: document.Client_Type || '',
-      Client_Contact: document.Client_Contact || '',
-      Client_Contact_Buying_Center: document.Client_Contact_Buying_Center || '',
-      Client_Journey: document.Client_Journey || '',
-      
-      // ALL Document metadata
-      Document_Confidentiality: document.Document_Confidentiality || '',
-      Document_Type: document.Document_Type || '',
-      Document_Sub_Type: document.Document_Sub_Type || '',
-      Document_Value_Range: document.Document_Value_Range || '',
-      Document_Outcome: document.Document_Outcome || '',
-      Last_Stage_Change_Date: document.Last_Stage_Change_Date || '',
-      
-      // ALL Business classification
-      Industry: document.Industry || '',
-      Sub_Industry: document.Sub_Industry || '',
-      Service: document.Service || '',
-      Sub_Service: document.Sub_Service || '',
-      Business_Unit: document.Business_Unit || '',
-      Region: document.Region || '',
-      Country: document.Country || '',
-      State: document.State || '',
-      City: document.City || '',
-      
-      // ALL People and programs
-      Author: document.Author || '',
-      SMEs: document.SMEs || '',
-      Commercial_Program: document.Commercial_Program || '',
-      Competitors: document.Competitors || '',
-      
-      // System fields
-      publishedAt: document.publishedAt,
-      createdAt: document.createdAt,
-      updatedAt: document.updatedAt,
-      locale: document.locale,
-      
-      // Text content for search
-      Description: descriptionText,
-      description_text: descriptionText,
-      attachments_text: attachmentsText,
-      
-      // Comprehensive searchable text
-      searchableText: [
-        document.SF_Number,
-        document.Unique_Id,
-        document.Client_Name,
-        document.Client_Contact,
-        document.Client_Contact_Buying_Center,
-        descriptionText,
-        document.Document_Confidentiality,
-        document.Industry,
-        document.Service,
-        document.Author,
-        document.SMEs,
-        document.Competitors,
-        attachmentsText
-      ].filter(Boolean).join(' ').toLowerCase(),
-      
-      // Structured filters
-      filters: {
-        Client_Type: document.Client_Type || '',
-        Document_Type: document.Document_Type || '',
-        Document_Sub_Type: document.Document_Sub_Type || '',
-        Document_Confidentiality: document.Document_Confidentiality || '',
-        Industry: document.Industry || '',
-        Sub_Industry: document.Sub_Industry || '',
-        Service: document.Service || '',
-        Sub_Service: document.Sub_Service || '',
-        Business_Unit: document.Business_Unit || '',
-        Region: document.Region || '',
-        Country: document.Country || '',
-        State: document.State || '',
-        City: document.City || '',
-        Commercial_Program: document.Commercial_Program || '',
-        Document_Outcome: document.Document_Outcome || ''
-      }
-    };
-    
-    await index.addDocuments([searchableDocument]);
-    console.log('✅ Indexed document to MeiliSearch (document_stores):', document.SF_Number);
+    console.log(`🔴 Document ${documentId} is not published: publishedAt = ${dbDoc?.publishedAt}`);
+    return false;
     
   } catch (error) {
-    console.error('❌ MeiliSearch indexing failed:', error);
+    console.error(`❌ Error checking published status for document ${documentId}:`, error);
+    return false;
   }
 }
 
-async function removeFromMeiliSearch(documentId: string | number): Promise<void> {
+// FIXED: Helper function to fetch full document for indexing
+async function fetchFullDocumentForIndexing(documentId: string | number): Promise<any> {
   try {
-    const { MeiliSearch } = require('meilisearch');
-    const meilisearch = new MeiliSearch({
-      host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
-      apiKey: process.env.MEILISEARCH_API_KEY,
+    // Use entityService.findOne with populate (no publicationState)
+    const fullDocument = await strapi.entityService.findOne('api::document-store.document-store', documentId, {
+      populate: {
+        Attachments: {
+          fields: ['id', 'name', 'alternativeText', 'caption', 'url', 'ext', 'mime', 'size']
+        }
+      }
     });
     
-    const index = meilisearch.index('document_stores');
-    await index.deleteDocument(documentId);
-    console.log('✅ Removed document from MeiliSearch (document_stores):', documentId);
+    if (fullDocument) {
+      console.log(`🟢 Fetched document ${documentId} with entityService`);
+      return fullDocument;
+    }
+    
+    // Fallback: Direct database query with populate
+    const dbDocument = await strapi.db.query('api::document-store.document-store').findOne({
+      where: { id: documentId },
+      populate: {
+        Attachments: true
+      }
+    });
+    
+    if (dbDocument) {
+      console.log(`🔵 Fetched document ${documentId} via direct DB query`);
+      return dbDocument;
+    }
+    
+    throw new Error(`Document ${documentId} not found with any method`);
+    
   } catch (error) {
-    console.error('❌ MeiliSearch removal failed:', error);
+    console.error(`❌ Error fetching document ${documentId} for indexing:`, error);
+    throw error;
   }
 }

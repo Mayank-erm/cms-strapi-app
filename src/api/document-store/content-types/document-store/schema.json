@@ -1,0 +1,195 @@
+{
+  "kind": "collectionType",
+  "collectionName": "document_stores",
+  "info": {
+    "singularName": "document-store",
+    "pluralName": "document-stores",
+    "displayName": "Document Store",
+    "description": "Stores metadata and context for business documents"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "SF_Number": {
+      "type": "string",
+      "unique": true
+    },
+    "Unique_Id": {
+      "type": "string"
+    },
+    "Description": {
+      "type": "blocks"
+    },
+    "Client_Name": {
+      "type": "string"
+    },
+    "Client_Type": {
+      "type": "enumeration",
+      "enum": [
+        "Global Key Client",
+        "Regional Key Client",
+        "Regional Market Portfolio",
+        "Client"
+      ]
+    },
+    "Client_Contact": {
+      "type": "string"
+    },
+    "Client_Contact_Buying_Center": {
+      "type": "string"
+    },
+    "Client_Journey": {
+      "type": "string"
+    },
+    "Document_Confidentiality": {
+      "type": "enumeration",
+      "enum": [
+        "Not Confidential",
+        "Confidential"
+      ]
+    },
+    "Document_Type": {
+      "type": "enumeration",
+      "enum": [
+        "Proposal",
+        "External case study",
+        "Internal win story",
+        "Experience listing",
+        "Pitch content",
+        "Marketing material",
+        "Thought leadership"
+      ]
+    },
+    "Document_Sub_Type": {
+      "type": "enumeration",
+      "enum": [
+        "Sole-source",
+        "RFP Response",
+        "Competitive",
+        "Change Order",
+        "Standalone",
+        "EOI",
+        "RFI",
+        "RFQ"
+      ]
+    },
+    "Document_Value_Range": {
+      "type": "string"
+    },
+    "Document_Outcome": {
+      "type": "enumeration",
+      "enum": [
+        "Won",
+        "Lost",
+        "Abandoned",
+        "Decision in progress",
+        "Scope changed (Proposal Revised)",
+        "Full Proposal Not Yet Submitted"
+      ]
+    },
+    "Last_Stage_Change_Date": {
+      "type": "date"
+    },
+    "Industry": {
+      "type": "enumeration",
+      "enum": [
+        "Industry A",
+        "Industry B",
+        "Industry C"
+      ]
+    },
+    "Sub_Industry": {
+      "type": "enumeration",
+      "enum": [
+        "Sub A",
+        "Sub B",
+        "Sub C"
+      ]
+    },
+    "Service": {
+      "type": "enumeration",
+      "enum": [
+        "Service A",
+        "Service B",
+        "Service C"
+      ]
+    },
+    "Sub_Service": {
+      "type": "enumeration",
+      "enum": [
+        "Sub A",
+        "Sub B",
+        "Sub C"
+      ]
+    },
+    "Business_Unit": {
+      "type": "enumeration",
+      "enum": [
+        "BU A",
+        "BU B",
+        "BU C"
+      ]
+    },
+    "Region": {
+      "type": "enumeration",
+      "enum": [
+        "Region A",
+        "Region B",
+        "Region C"
+      ]
+    },
+    "Country": {
+      "type": "enumeration",
+      "enum": [
+        "India",
+        "USA",
+        "UK"
+      ]
+    },
+    "State": {
+      "type": "enumeration",
+      "enum": [
+        "Delhi",
+        "California",
+        "London"
+      ]
+    },
+    "City": {
+      "type": "enumeration",
+      "enum": [
+        "New Delhi",
+        "San Francisco",
+        "Manchester"
+      ]
+    },
+    "Author": {
+      "type": "text"
+    },
+    "Commercial_Program": {
+      "type": "enumeration",
+      "enum": [
+        "R2L",
+        "High Priority",
+        "N/A"
+      ]
+    },
+    "SMEs": {
+      "type": "text"
+    },
+    "Competitors": {
+      "type": "string"
+    },
+    "Attachments": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    }
+  }
+}

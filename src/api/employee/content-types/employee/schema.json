@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "employees",
+  "info": {
+    "singularName": "employee",
+    "pluralName": "employees",
+    "displayName": "Employee",
+    "description": "Employee records for document associations"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "email": {
+      "type": "email",
+      "unique": true
+    },
+    "department": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "Documented_By": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::document-store.document-store",
+      "mappedBy": "Author"
+    },
+    "SME_For": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::document-store.document-store",
+      "mappedBy": "SMEs"
+    }
+  }
+}
